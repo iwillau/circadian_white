@@ -1,0 +1,7 @@
+{
+  "domain": "circadian_white",
+  "name": "Circadian White",
+  "documentation": "https://www.home-assistant.io/integrations/random",
+  "codeowners": ["@fabaff"],
+  "quality_scale": "internal"
+}
