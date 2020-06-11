@@ -1,6 +1,7 @@
 import logging
 from homeassistant.util import dt as dt_util
 from datetime import timedelta
+from csv import writer
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,12 +27,10 @@ class CircadianWhiteSensor():
         self._available = False
     
         now = dt_util.now()
-        self._day_start = now.replace(hour=7, minute=1, seconds=42)
-        #self._day_middle = dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_NOON]))
-        #self._day_end = dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_DUSK]))
-        
+        self._day_start = now.replace(hour=7, minute=1, second=42)
+        self._day_middle = now.replace(hour=12, minute=19, second=32)
+        self._day_end = now.replace(hour=17, minute=37, second=26)
         self._last_sun_update = now
-        print(now)
 
     @property
     def state(self):
@@ -63,6 +62,10 @@ class CircadianWhiteSensor():
             _LOGGER.warn("Astral data is out of date")
             return
 
+        self._calculate_kelvins(now)
+        _LOGGER.info("Day is currently: {}".format(self._currently))
+        
+    def _calculate_kelvins(self, now):
 
         gap = timedelta(hours=2)
 
@@ -93,16 +96,38 @@ class CircadianWhiteSensor():
             self._currently = 'Night'
             self._state = self._minimum
 
-        _LOGGER.info("Day is currently: {}".format(self._currently))
-
     def _calc_progress(self, start, end, length, progress):
         m_length = end - start  # Actual Length of the Metric (kelvins)
         percentage_complete = progress / length  # Perc
         m_progress = percentage_complete * m_length
         self._state = int(m_progress+start)
-      
 
-circ = CircadianWhiteSensor(1500, 4500, 6500)
 
-print('#############################################')
-print(circ)
+if __name__ == '__main__':
+    circ = CircadianWhiteSensor(1500, 4500, 6500)
+
+    def one_day():
+        start = dt_util.now().replace(hour=0, minute=0, second=0)
+        for seconds in range(86400):
+            yield start + timedelta(seconds=seconds)
+
+
+    with open('sample_day.csv', 'w', newline='') as file_h:
+        csv = writer(file_h)
+        csv.writerow(['Date', 'Time', 'Time of Day', 'Second', 'Kelvins'])
+        tod = None
+        state = None
+        for now in one_day():
+            circ._calculate_kelvins(now)
+            if state != circ.state:
+                state = circ.state
+                csv.writerow([now.date(), now.strftime("%H:%M"), 
+                              circ._currently, now.second, circ.state])
+                          
+            if tod != circ._currently:
+                tod = circ._currently
+                print("{} {:16} -> {}".format(now.strftime("%H:%M:%S"), tod, circ.state))
+                
+            
+
+
