@@ -25,7 +25,6 @@ SCAN_INTERVAL = timedelta(minutes=1)
 
 _LOGGER = logging.getLogger(__name__)
 
-CONF_INITIAL = "initial"
 ATTR_MAX = "max"
 ATTR_MIN = "min"
 ATTR_MID = "mid"
@@ -42,10 +41,9 @@ ICON = "mdi:web-clock"
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-        vol.Optional(CONF_INITIAL, default=4500): cv.positive_int,
-        vol.Optional(ATTR_MAX, default=6000): cv.positive_int,
-        vol.Optional(ATTR_MIN, default=2500): cv.positive_int,
-        vol.Optional(ATTR_MID, default=5500): cv.positive_int,
+        vol.Optional(ATTR_MAX, default=6500): cv.positive_int,
+        vol.Optional(ATTR_MIN, default=1500): cv.positive_int,
+        vol.Optional(ATTR_MID, default=4500): cv.positive_int,
     }
 )
 
@@ -53,7 +51,6 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the Circadian White Entity."""
     async_add_entities([CircadianWhiteSensor(config.get(CONF_NAME),
-                                             config.get(CONF_INITIAL),
                                              config.get(ATTR_MIN), 
                                              config.get(ATTR_MID), 
                                              config.get(ATTR_MAX)
@@ -63,7 +60,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 class CircadianWhiteSensor(Entity):
     """Update a sensor with a circadian white level"""
 
-    def __init__(self, name, initial, minimum, middle, maximum):
+    def __init__(self, name, minimum, middle, maximum):
         """Initialize the Random sensor."""
         self._name = name
         self._minimum = minimum
@@ -75,7 +72,8 @@ class CircadianWhiteSensor(Entity):
         self._day_middle = None
         self._currently = None
         self._last_sun_update = None
-        self._state = initial
+        self._state = self._maximum
+        self._available = False
 
     async def async_added_to_hass(self): 
 
@@ -93,7 +91,7 @@ class CircadianWhiteSensor(Entity):
     @property
     def available(self):
         """Not available if we don't have Sun data"""
-        return self._last_sun_update != None
+        return self._available
 
     @property
     def state(self):
@@ -133,10 +131,18 @@ class CircadianWhiteSensor(Entity):
               - Night
         """
         if self._last_sun_update is None:
+            self._available = False
             _LOGGER.info("Circadian White is still waiting for an update from the Sun")
             return
 
         now = dt_util.now()
+        # If we haven't been updated for more than 24 hours -> bail
+        if (now - self._last_sun_update).days > 0:
+            self._available = False
+            _LOGGER.warn("Astral data is out of date")
+            return
+
+
         gap = timedelta(hours=2)
 
         if now < self._day_start:
@@ -200,6 +206,7 @@ class CircadianWhiteSensor(Entity):
             self._day_end = self._day_end - timedelta(days=1)
         
         self._last_sun_update = point_in_time
+        # self._available = True
         self.async_write_ha_state()
 
         schedule = self._day_end + timedelta(hours=3)
