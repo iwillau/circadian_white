@@ -9,7 +9,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 if __name__ == '__main__':
-    from .sensor import CircadianWhiteSensor
+    from custom_components.circadian_white.sensor import CircadianWhiteSensor
     # When to simulate
     dt_util.set_default_time_zone(
         dt_util.get_time_zone('Australia/Melbourne'))
@@ -20,11 +20,13 @@ if __name__ == '__main__':
     start = now.replace(hour=0, minute=0, second=0)
 
     def one_day():
-        circ = CircadianWhiteSensor(1500, 4500, 6500)
+        circ = CircadianWhiteSensor('test_math', 1500, 4500, 6500, 2, 3)
         circ._day_start = day_start
         circ._day_middle = day_middle
         circ._day_end = day_end
         circ._last_sun_update = start
+        print("Sensor Current Config:")
+        print(circ.device_state_attributes)
         state = None
         for seconds in range(86399):
             now = start + timedelta(seconds=seconds)

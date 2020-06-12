@@ -28,6 +28,8 @@ _LOGGER = logging.getLogger(__name__)
 ATTR_MAX = "max"
 ATTR_MIN = "min"
 ATTR_MID = "mid"
+ATTR_TOP_EXPONENT = "top_exponent"
+ATTR_BOTTOM_EXPONENT = "bottom_exponent"
 
 STATE_ATTR_DAY_START = "day_start"
 STATE_ATTR_DAY_MIDDLE = "day_middle"
@@ -44,6 +46,8 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(ATTR_MAX, default=6500): cv.positive_int,
         vol.Optional(ATTR_MIN, default=1500): cv.positive_int,
         vol.Optional(ATTR_MID, default=4500): cv.positive_int,
+        vol.Optional(ATTR_TOP_EXPONENT, default=2): cv.positive_int,
+        vol.Optional(ATTR_BOTTOM_EXPONENT, default=3): cv.positive_int,
     }
 )
 
@@ -51,16 +55,18 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     """Set up the Circadian White Entity."""
     async_add_entities([CircadianWhiteSensor(config.get(CONF_NAME),
-                                             config.get(ATTR_MIN), 
-                                             config.get(ATTR_MID), 
-                                             config.get(ATTR_MAX)
+                                             config.get(ATTR_MIN),
+                                             config.get(ATTR_MID),
+                                             config.get(ATTR_MAX),
+                                             config.get(ATTR_TOP_EXPONENT),
+                                             config.get(ATTR_BOTTOM_EXPONENT),
                                             )], True)
 
 
 class CircadianWhiteSensor(Entity):
     """Update a sensor with a circadian white level"""
 
-    def __init__(self, name, minimum, middle, maximum):
+    def __init__(self, name, minimum, middle, maximum, top_exponent, bottom_exponent):
         """Initialize the Random sensor."""
         self._name = name
         self._minimum = minimum
@@ -68,14 +74,21 @@ class CircadianWhiteSensor(Entity):
         self._maximum = maximum
         self._unit_of_measurement = 'kelvins'
         self._day_start = None
-        self._day_end = None
         self._day_middle = None
+        self._day_end = None
         self._currently = None
         self._last_sun_update = None
         self._state = self._maximum
         self._available = False
+        
+        # Math Variables. Only the exponent is exposed to the user
+        # But they could all be changed for varied results.
+        # Utilised do_math to see the results.
+        self._x_limit = 2
+        self._top_exponent = top_exponent
+        self._bottom_exponent = bottom_exponent
 
-    async def async_added_to_hass(self): 
+    async def async_added_to_hass(self):
 
         @callback
         def update_config(event):
@@ -113,15 +126,17 @@ class CircadianWhiteSensor(Entity):
         return {STATE_ATTR_DAY_START: self._day_start.isoformat(),
                 STATE_ATTR_DAY_MIDDLE: self._day_middle.isoformat(),
                 STATE_ATTR_DAY_END: self._day_end.isoformat(),
-                ATTR_MAX: self._maximum, 
+                ATTR_MAX: self._maximum,
                 ATTR_MIN: self._minimum,
                 ATTR_MID: self._middle,
+                ATTR_TOP_EXPONENT: self._top_exponent,
+                ATTR_BOTTOM_EXPONENT: self._bottom_exponent,
                 STATE_ATTR_CURRENTLY: self._currently}
 
     async def async_update(self):
         """Calculate where we are in the current day, the day follows the following sequence:
               - Night
-              - Early Morning 
+              - Early Morning
               - Mid Morning
               - Late Morning
               - Early Afternoon
@@ -142,44 +157,13 @@ class CircadianWhiteSensor(Entity):
             _LOGGER.warn("Astral data is out of date")
             return
 
-
-        gap = timedelta(hours=2)
-
-        if now < self._day_start:
-            self._currently = 'Night'
-            self._state = self._minimum
-        elif now < (self._day_start + gap):
-            self._currently = 'Early Morning'
-            self._calc_progress(self._minimum, self._middle, gap.seconds, (now - self._day_start).seconds)
-        elif now < (self._day_middle - gap):
-            self._currently = 'Mid Morning'
-            self._state = self._middle
-        elif now < (self._day_middle):
-            self._currently = 'Late Morning'
-            self._calc_progress(self._middle, self._maximum, gap.seconds, (now - self._day_middle + gap).seconds)
-        elif now < (self._day_middle + gap):
-            self._currently = 'Early Afternoon'
-            self._calc_progress(self._maximum, self._middle, gap.seconds, (now - self._day_middle).seconds)
-        elif now < (self._day_end - gap):
-            self._currently = 'Mid Afternoon'
-            self._state = self._middle
-        elif now < (self._day_end):
-            self._currently = 'Late Afternoon'
-            self._calc_progress(self._middle, self._minimum, gap.seconds, (now - self._day_end + gap).seconds)
-        elif now < (self._day_end + gap):
-            self._currently = 'Evening'
-        else:
-            self._currently = 'Night'
-            self._state = self._minimum
-
+        self.calculate_kelvins(now)
         _LOGGER.info("Day is currently: {}".format(self._currently))
 
-    def _calc_progress(self, start, end, length, progress):
-        m_length = end - start  # Actual Length of the Metric (kelvins)
-        percentage_complete = progress / length  # Perc
-        m_progress = percentage_complete * m_length
-        self._state = int(m_progress+start)
-      
+    def _calculate_kelvins(self, now):
+        self._state = self._minimum
+        self._currently = 'Night'
+
     @callback
     def update_sun_events(self, point_in_time):
         _LOGGER.debug("Updating Astral Events from Sun Entity")
@@ -204,7 +188,7 @@ class CircadianWhiteSensor(Entity):
             self._day_middle = self._day_middle - timedelta(days=1)
         if today != self._day_end.date():
             self._day_end = self._day_end - timedelta(days=1)
-        
+
         self._last_sun_update = point_in_time
         # self._available = True
         self.async_write_ha_state()
@@ -212,7 +196,7 @@ class CircadianWhiteSensor(Entity):
         schedule = self._day_end + timedelta(hours=3)
         if point_in_time > schedule:
             schedule = self._day_end + timedelta(hours=27)
-        
+
         _LOGGER.debug("Scheduling next astral for: {}".format(schedule))
         async_track_point_in_time(self.hass, self.update_sun_events, schedule)
 
