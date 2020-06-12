@@ -155,6 +155,8 @@ if __name__ == '__main__':
                 tod = circ._currently
                 plot_tod['times'].append(seconds)
                 plot_tod['kelvins'].append(circ.state)
+                print("{} {:16} -> {}".format(
+                    now.strftime("%H:%M:%S"), tod, circ.state))
     
     with plt.xkcd():
         fig = plt.figure()
@@ -176,45 +178,10 @@ if __name__ == '__main__':
         plt.title("Circadian White level for a sample Day")
         plt.plot(plot_times, plot_kelvins)
 
-#        from pprint import pprint
-#        pprint(plot_tod)
-#        left = 0
-#        for label, length in plot_tod:
-#            print("Fill: {}  {}->{}".format(label, left, length+1))
-#            plt.fill_between(plot_times[left:length+1],
-#                             1000,
-#                             plot_kelvins[left:length+1], 
-#                             alpha=0.8,
-#            )
-#            left = length+1
-        plt.vlines([4000, 8000], 0, 4000, colors='grey')
+        plt.vlines(plot_tod['times'], 0, plot_tod['kelvins'], colors='grey')
         
     plt.show()
     fig.clear()
     plt.close(fig)
                 
-    
-'''    from pylab import *
-    
-    t = arange(0.0, 2.0, 0.01)
-    s = sin(2*pi*t)
-    plot(t, s)
-    
-    xlabel('time (s)')
-    ylabel('voltage (mV)')
-    title('About as simple as it gets, folks')
-    grid(True)
-    show()
-'''
-
-#	ax.bar([-0.125, 1.0-0.125], [0, 100], 0.25)
-
-
-
-#	ax.set_label('Kelvins')
-#	ax.set_xticks([0, 1])
-#	ax.set_xlim([-0.5, 1.5])
-
-#    ax.	
-
 
