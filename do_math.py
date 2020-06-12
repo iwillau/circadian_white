@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 
 _LOGGER = logging.getLogger(__name__)
 
+TOP_EXPONENT=2
+BOTTOM_EXPONENT=3
+
 
 if __name__ == '__main__':
     from custom_components.circadian_white.sensor import CircadianWhiteSensor
@@ -20,11 +23,13 @@ if __name__ == '__main__':
     start = now.replace(hour=0, minute=0, second=0)
 
     def one_day():
-        circ = CircadianWhiteSensor('test_math', 1500, 4500, 6500, 2, 3)
+        circ = CircadianWhiteSensor('test_math', 1500, 4500, 6500, TOP_EXPONENT, BOTTOM_EXPONENT)
+        circ._x_limit = 2
         circ._day_start = day_start
         circ._day_middle = day_middle
         circ._day_end = day_end
         circ._last_sun_update = start
+        circ._calculate_day_events()
         print("Sensor Current Config:")
         print(circ.device_state_attributes)
         state = None
@@ -94,6 +99,10 @@ if __name__ == '__main__':
         plt.plot(plot_times, plot_kelvins)
 
         plt.vlines(plot_tod['times'], 0, plot_tod['kelvins'], colors='grey')
+
+        fig.text(0.8, 0.4, 
+            'Top Exponent: {}\nBottom Exponent: {}'.format(TOP_EXPONENT, BOTTOM_EXPONENT),
+            ha='center')
 
     plt.show()
     fig.clear()
