@@ -34,7 +34,7 @@ ATTR_BOTTOM_EXPONENT = "bottom_exponent"
 STATE_ATTR_DAY_START = "day_start"
 STATE_ATTR_DAY_MIDDLE = "day_middle"
 STATE_ATTR_DAY_END = "day_end"
-STATE_ATTR_CURRENTLY = "currently"
+STATE_ATTR_CURRENTLY = "time_of_day"
 
 DEFAULT_NAME = "Circadian White"
 
@@ -46,8 +46,8 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(ATTR_MAX, default=6500): cv.positive_int,
         vol.Optional(ATTR_MIN, default=2500): cv.positive_int,
         vol.Optional(ATTR_MID, default=4500): cv.positive_int,
-        vol.Optional(ATTR_TOP_EXPONENT, default=2): cv.positive_int,
-        vol.Optional(ATTR_BOTTOM_EXPONENT, default=3): cv.positive_int,
+        vol.Optional(ATTR_TOP_EXPONENT, default=2): vol.All(vol.Coerce(int), vol.Range(min=1, min_included=False)),
+        vol.Optional(ATTR_BOTTOM_EXPONENT, default=3): vol.All(vol.Coerce(int), vol.Range(min=1, min_included=False)),
     }
 )
 
@@ -69,6 +69,7 @@ class CircadianWhiteSensor(Entity):
     def __init__(self, name, minimum, middle, maximum, top_exponent, bottom_exponent):
         """Initialize the Random sensor."""
         self._name = name
+        self._overnight = 1500
         self._minimum = minimum
         self._middle = middle
         self._maximum = maximum
@@ -160,9 +161,14 @@ class CircadianWhiteSensor(Entity):
 
     def _calculate_kelvins(self, now):
         self._state = self._minimum
-        if now < self._day_start:
+        if now < self._predawn:
             self._currently = 'Night'
-            self._state = self._minimum
+            self._state = self._overnight
+        elif now < self._day_start:
+            self._currently = 'Pre-Dawn'
+            progress = (now - self._predawn).seconds/3600  # Currently predawn is hardcoded for 1 hour
+            curve = self._predawn_a * self._predawn_exponent ** (self._x_limit - (progress * self._x_limit * 2)) + self._predawn_c
+            self._state = int(curve)
         elif now < self._mid_morning:
             self._currently = 'Early Morning'
             progress = (now - self._day_start)/self._morning_length
@@ -183,9 +189,19 @@ class CircadianWhiteSensor(Entity):
             progress = (now - self._mid_afternoon)/self._afternoon_length
             curve = self._bottom_a * self._bottom_exponent ** (self._x_limit - (progress * self._x_limit * 2)) + self._bottom_c
             self._state = int(curve)
+        elif now < self._late_evening:
+            self._currently = 'Evening'
+            progress = (now - self._day_end)/self._evening_length
+            curve = self._evening_a * self._evening_exponent ** ((progress * self._x_limit * 2) - self._x_limit) + self._evening_c
+            self._state = int(curve)
+        elif now < self._nighttime:
+            self._currently = 'Late Evening'
+            progress = (now - self._day_end)/self._evening_length
+            curve = self._evening_a * self._evening_exponent ** ((progress * self._x_limit * 2) - self._x_limit) + self._evening_c
+            self._state = int(curve)
         else:
             self._currently = 'Night'
-            self._state = self._minimum
+            self._state = self._overnight
 
     def _update_formula(self):
         """We use the general formula
@@ -212,6 +228,20 @@ class CircadianWhiteSensor(Entity):
         b = self._top_exponent
         self._top_a = ( y2 - y1 )/(b ** -x - b ** x)
         self._top_c = (( b ** -x ) * y1 - (b ** x) * y2) / ( b ** -x - b ** x)
+
+        # Now the predawn vars
+        y2 = self._minimum
+        y1 = self._overnight
+        b = self._predawn_exponent = 2
+        self._predawn_a = ( y2 - y1 )/(b ** -x - b ** x)
+        self._predawn_c = (( b ** -x ) * y1 - (b ** x) * y2) / ( b ** -x - b ** x)
+
+        # Now the evening vars
+        y2 = self._minimum
+        y1 = self._overnight
+        b = self._evening_exponent = 8
+        self._evening_a = ( y2 - y1 )/(b ** -x - b ** x)
+        self._evening_c = (( b ** -x ) * y1 - (b ** x) * y2) / ( b ** -x - b ** x)
 
     @callback
     def update_sun_events(self, point_in_time):
@@ -254,9 +284,24 @@ class CircadianWhiteSensor(Entity):
 
 
     def _calculate_day_events(self):
+        self._predawn = self._day_start - timedelta(hours=1)
         self._morning_length = (self._day_middle - self._day_start)/2
         self._mid_morning = self._day_start + self._morning_length
 
+        self._late_evening = self._day_end + timedelta(hours=1)
+        # We don't want late_night to be very far past 10PM
+        ten_pm = self._day_end.replace(hour=22, minute=0, second=0)
+        while self._late_evening < ten_pm:
+            self._late_evening = self._late_evening + timedelta(minutes=15)
+
+        self._nighttime = self._late_evening + timedelta(hours=1)
+
+        # This is a bit of a fallacy. But if dusk is more than 4 hours before late evening
+        # We're just going to push it later 1/2 an hour. So that "Evening" is't quite as long a part of the day.
+        if (self._late_evening - self._day_end) > timedelta(hours=4):
+            self._day_end += timedelta(minutes=30)
+
+        self._evening_length = self._nighttime - self._day_end
         self._afternoon_length = (self._day_end - self._day_middle)/2
         self._mid_afternoon = self._day_middle + self._afternoon_length
 

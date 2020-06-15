@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 
 _LOGGER = logging.getLogger(__name__)
 
-TOP_EXPONENT=4
-BOTTOM_EXPONENT=2
+TOP_EXPONENT=2
+BOTTOM_EXPONENT=2.2
 
 
 if __name__ == '__main__':
@@ -23,7 +23,7 @@ if __name__ == '__main__':
     start = now.replace(hour=0, minute=0, second=0)
 
     def one_day():
-        circ = CircadianWhiteSensor('test_math', 1500, 4500, 6500, TOP_EXPONENT, BOTTOM_EXPONENT)
+        circ = CircadianWhiteSensor('test_math', 2500, 4500, 6500, TOP_EXPONENT, BOTTOM_EXPONENT)
         circ._x_limit = 2
         circ._day_start = day_start
         circ._day_middle = day_middle
@@ -33,11 +33,13 @@ if __name__ == '__main__':
         print("Sensor Current Config:")
         print(circ.device_state_attributes)
         state = None
+        tod = None
         for seconds in range(86399):
             now = start + timedelta(seconds=seconds)
             circ._calculate_kelvins(now)
-            if state != circ.state:
+            if state != circ.state or tod != circ._currently:
                 state = circ.state
+                tod = circ._currently
                 yield seconds, now, circ
         #Yield the final state no matter what
         now = start + timedelta(seconds=86400)
@@ -87,7 +89,7 @@ if __name__ == '__main__':
         ax.spines['right'].set_color('none')
         ax.spines['top'].set_color('none')
 
-        plt.yticks([1500, 4500, 6500])
+        plt.yticks([1500, 2500, 4500, 6000, 6500])
         plt.ylim([1000, 7000])
         plt.ylabel('Kelvins')
 
@@ -99,6 +101,10 @@ if __name__ == '__main__':
         plt.plot(plot_times, plot_kelvins)
 
         plt.vlines(plot_tod['times'], 0, plot_tod['kelvins'], colors='grey')
+
+        # plt.annotate(xy=[0,6000], s="6000")
+        # plt.axhline(y=6000)
+        plt.axhline(y=2500)
 
         fig.text(0.8, 0.4, 
             'Top Exponent: {}\nBottom Exponent: {}'.format(TOP_EXPONENT, BOTTOM_EXPONENT),
