@@ -47,7 +47,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Optional(ATTR_MIN, default=2500): cv.positive_int,
         vol.Optional(ATTR_MID, default=4500): cv.positive_int,
         vol.Optional(ATTR_TOP_EXPONENT, default=2): vol.All(vol.Coerce(int), vol.Range(min=1, min_included=False)),
-        vol.Optional(ATTR_BOTTOM_EXPONENT, default=3): vol.All(vol.Coerce(int), vol.Range(min=1, min_included=False)),
+        vol.Optional(ATTR_BOTTOM_EXPONENT, default=2.2): vol.All(vol.Coerce(int), vol.Range(min=1, min_included=False)),
     }
 )
 
@@ -262,12 +262,10 @@ class CircadianWhiteSensor(Entity):
         # the times will be in the future, small error, but we'll just set them to today
         # unless we are already past the day_end
         today = point_in_time.date()
-
-        if today == self._day_end.date():
-          if today != self._day_start.date():
-              self._day_start = self._day_start - timedelta(days=1)
-          if today != self._day_middle.date():
-              self._day_middle = self._day_middle - timedelta(days=1)
+        if today != self._day_end.date():
+            self._day_end = self._day_end - timedelta(days=1)
+            self._day_start = self._day_start - timedelta(days=1)
+            self._day_middle = self._day_middle - timedelta(days=1)
 
         self._calculate_day_events()
 
