@@ -44,7 +44,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
         vol.Optional(ATTR_MAX, default=6500): cv.positive_int,
-        vol.Optional(ATTR_MIN, default=1500): cv.positive_int,
+        vol.Optional(ATTR_MIN, default=2500): cv.positive_int,
         vol.Optional(ATTR_MID, default=4500): cv.positive_int,
         vol.Optional(ATTR_TOP_EXPONENT, default=2): cv.positive_int,
         vol.Optional(ATTR_BOTTOM_EXPONENT, default=3): cv.positive_int,
@@ -166,19 +166,23 @@ class CircadianWhiteSensor(Entity):
         elif now < self._mid_morning:
             self._currently = 'Early Morning'
             progress = (now - self._day_start)/self._morning_length
-            self._state = self._bottom_a * self._bottom_exponent ** ((progress * self._x_limit * 2) - self._x_limit) + self._bottom_c
+            curve = self._bottom_a * self._bottom_exponent ** ((progress * self._x_limit * 2) - self._x_limit) + self._bottom_c
+            self._state = int(curve)
         elif now < self._day_middle:
             self._currently = 'Late Morning'
             progress = (now - self._mid_morning)/self._morning_length
-            self._state = self._top_a * self._top_exponent ** (self._x_limit - (progress * self._x_limit * 2)) + self._top_c
+            curve = self._top_a * self._top_exponent ** (self._x_limit - (progress * self._x_limit * 2)) + self._top_c
+            self._state = int(curve)
         elif now < self._mid_afternoon:
             self._currently = 'Early Afternoon'
             progress = (now - self._day_middle)/self._afternoon_length
-            self._state = self._top_a * self._top_exponent ** ((progress * self._x_limit * 2) - self._x_limit) + self._top_c
+            curve = self._top_a * self._top_exponent ** ((progress * self._x_limit * 2) - self._x_limit) + self._top_c
+            self._state = int(curve)
         elif now < self._day_end:
             self._currently = 'Late Afternoon'
             progress = (now - self._mid_afternoon)/self._afternoon_length
-            self._state = self._bottom_a * self._bottom_exponent ** (self._x_limit - (progress * self._x_limit * 2)) + self._bottom_c
+            curve = self._bottom_a * self._bottom_exponent ** (self._x_limit - (progress * self._x_limit * 2)) + self._bottom_c
+            self._state = int(curve)
         else:
             self._currently = 'Night'
             self._state = self._minimum
@@ -224,15 +228,16 @@ class CircadianWhiteSensor(Entity):
         self._day_middle = dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_NOON]))
         self._day_end = dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_DUSK]))
 
-        # If we're bootstrapping for any reason, the times will be in the future, small error, but we'll just set them to today
+        # If we're bootstrapping for any reason, ie, a restart/reload
+        # the times will be in the future, small error, but we'll just set them to today
+        # unless we are already past the day_end
         today = point_in_time.date()
 
-        if today != self._day_start.date():
-            self._day_start = self._day_start - timedelta(days=1)
-        if today != self._day_middle.date():
-            self._day_middle = self._day_middle - timedelta(days=1)
-        if today != self._day_end.date():
-            self._day_end = self._day_end - timedelta(days=1)
+        if today == self._day_end.date():
+          if today != self._day_start.date():
+              self._day_start = self._day_start - timedelta(days=1)
+          if today != self._day_middle.date():
+              self._day_middle = self._day_middle - timedelta(days=1)
 
         self._calculate_day_events()
 
