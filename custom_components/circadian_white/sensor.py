@@ -275,9 +275,9 @@ class CircadianWhiteSensor(Entity):
         self._available = True
         self.async_write_ha_state()
 
-        schedule = self._day_end + timedelta(hours=3)
+        schedule = self._nighttime + timedelta(minutes=15)
         if point_in_time > schedule:
-            schedule = self._day_end + timedelta(hours=27)
+            schedule = self._nighttime + timedelta(minutes=15)
 
         _LOGGER.debug("Scheduling next astral for: {}".format(schedule))
         async_track_point_in_time(self.hass, self.update_sun_events, schedule)
