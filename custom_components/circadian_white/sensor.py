@@ -255,6 +255,7 @@ class CircadianWhiteSensor(Entity):
             return
 
         self._calculate_day_events(
+            point_in_time,
             dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_DAWN])),
             dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_NOON])),
             dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_DUSK])),
@@ -303,8 +304,3 @@ class CircadianWhiteSensor(Entity):
         self._afternoon_length = (self._day_end - self._day_middle)/2
         self._mid_afternoon = self._day_middle + self._afternoon_length
 
-        schedule = self._nighttime + timedelta(minutes=15)
-        if now > schedule:
-            schedule = self._nighttime + timedelta(minutes=15)
-
-        print(schedule)
