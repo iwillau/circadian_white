@@ -1,6 +1,6 @@
 """Support for circadian white sensor."""
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 import voluptuous as vol
 
 from homeassistant.core import callback
@@ -254,20 +254,11 @@ class CircadianWhiteSensor(Entity):
             )
             return
 
-        self._day_start = dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_DAWN]))
-        self._day_middle = dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_NOON]))
-        self._day_end = dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_DUSK]))
-
-        # If we're bootstrapping for any reason, ie, a restart/reload
-        # the times will be in the future, small error, but we'll just set them to today
-        # unless we are already past the day_end
-        today = point_in_time.date()
-        if today != self._day_end.date():
-            self._day_end = self._day_end - timedelta(days=1)
-            self._day_start = self._day_start - timedelta(days=1)
-            self._day_middle = self._day_middle - timedelta(days=1)
-
-        self._calculate_day_events()
+        self._calculate_day_events(
+            dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_DAWN])),
+            dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_NOON])),
+            dt_util.as_local(dt_util.parse_datetime(sun.attributes[STATE_ATTR_NEXT_DUSK])),
+            )
 
         self._last_sun_update = point_in_time
         self._available = True
@@ -281,7 +272,16 @@ class CircadianWhiteSensor(Entity):
         async_track_point_in_time(self.hass, self.update_sun_events, schedule)
 
 
-    def _calculate_day_events(self):
+    def _calculate_day_events(self, now, day_start, day_middle, day_end):
+        # If we're bootstrapping for any reason, ie, a restart/reload
+        # the times will be in the future, small error, but we'll just set them to today
+        # unless we are already past the day_end
+        today = now.date()
+        # Co-erce them all to today. 
+        self._day_start = datetime.combine(today, day_start.time(), day_start.tzinfo)
+        self._day_middle = datetime.combine(today, day_middle.time(), day_middle.tzinfo)
+        self._day_end = datetime.combine(today, day_end.time(), day_end.tzinfo)
+
         self._predawn = self._day_start - timedelta(hours=1)
         self._morning_length = (self._day_middle - self._day_start)/2
         self._mid_morning = self._day_start + self._morning_length
@@ -303,3 +303,8 @@ class CircadianWhiteSensor(Entity):
         self._afternoon_length = (self._day_end - self._day_middle)/2
         self._mid_afternoon = self._day_middle + self._afternoon_length
 
+        schedule = self._nighttime + timedelta(minutes=15)
+        if now > schedule:
+            schedule = self._nighttime + timedelta(minutes=15)
+
+        print(schedule)
