@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 
 _LOGGER = logging.getLogger(__name__)
 
-TOP_EXPONENT=2
-BOTTOM_EXPONENT=3
+TOP_EXPONENT=4
+BOTTOM_EXPONENT=2
 
 
 if __name__ == '__main__':
